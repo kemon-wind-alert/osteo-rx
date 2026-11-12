@@ -4,7 +4,7 @@
 // 添付文書に数値の無い区切り（腎機能30など）は「アプリの目安」として画面に明示する。
 "use strict";
 
-const APP_VERSION = "0.1.0";
+const APP_VERSION = "0.2.0";
 const CA_LOW = 8.8;   // 血清Ca 共用基準範囲の下限（JCCLS、病院資料経由で確認）
 const CA_HIGH = 10.1; // 同 上限
 const RENAL_SEVERE = 30; // アプリの目安（Ccr/eGFR）：デノタス→活性型VitD、BP/ロモの低Ca警告（添付文書のeGFR<30記載に合わせた）
@@ -42,11 +42,15 @@ const SRC = {
   vdIns: { t: "厚生労働省 臨床検査の保険適用について（平成30年9月）※25(OH)Dの算定要件。2026年改定後の文言は未確認", u: "https://www.mhlw.go.jp/content/12404000/000345681.pdf" },
   onj: { t: "薬剤関連顎骨壊死の病態と管理：顎骨壊死検討委員会ポジションペーパー2023", u: "https://www.jsoms.or.jp/medical/pdf/2023/0217_1.pdf" },
   fda: { t: "FDA Drug Safety Communication（2024年1月）進行CKD患者でのデノスマブによる重篤な低Ca血症の枠囲み警告", u: "https://www.fda.gov/drugs/drug-safety-communications/fda-adds-boxed-warning-increased-risk-severe-hypocalcemia-patients-advanced-chronic-kidney-disease" },
+  nass: { t: "North American Spine Society. Diagnosis and Treatment of Adults with Osteoporotic Vertebral Fractures（2024）：急性期の骨粗鬆症性椎体骨折にテリパラチドを疼痛緩和・QOL改善のため提案（Grade B）", u: "https://north-american-spine-society.foleon.com/ebooks-research/osteoporotic-vertebral-fractures-clinical-guidelines/summary-of-questions-recommendations" },
+  nevitt: { t: "Nevitt MC, et al. Reduced risk of back pain following teriparatide treatment: a meta-analysis. Osteoporos Int 2006;17:273-280", u: "https://pubmed.ncbi.nlm.nih.gov/16142502/" },
+  hadji: { t: "Hadji P, et al. The effect of teriparatide compared with risedronate on reduction of back pain in postmenopausal women with osteoporotic vertebral fractures. Osteoporos Int 2012", u: "https://link.springer.com/article/10.1007/s00198-011-1856-y" },
   ckd: { t: "日本腎臓学会 CKD診療ガイド2012（eGFR式）", u: "https://jsn.or.jp/guideline/pdf/CKDguide2012.pdf" },
 };
 
 // ---------- 主薬 ----------
 const ORAL_BP_NOTE = "経口薬は起床時に水約180mLで服用し、30分は横にならず飲食を避ける。食道通過障害・30分座位不可は禁忌（→点滴・静注製剤へ）";
+const PAIN_NOTE = "椎体骨折の腰痛：北米脊椎学会GL（2024）は急性期の疼痛緩和・QOL改善にテリパラチドを提案（Grade B）、メタ解析でも新規・増悪腰痛が少ない。ただしリセドロン酸との直接比較RCTでは6か月の腰痛改善に差はなく、6〜18か月の腰痛悪化が少なかった";
 const DRUGS = {
   ROMO: { name: "ロモソズマブ（イベニティ）", dose: "210mg（105mg×2本）を月1回 皮下注、12か月まで", cls: "anabolic", src: ["romo", "gl"],
     notes: ["投与中はCa・ビタミンDの補給が必要。投与後2週〜1か月でCaが下がるので測定する", "終了後は骨吸収抑制薬（アレンドロン酸・デノスマブ）へつなぐ（GL2025）"] },
@@ -107,7 +111,7 @@ function collect() {
     renal: dialysis ? 0 : rn.use, // 透析は最重度として扱う
     ca: num("#ca"), vd: num("#vd"),
     yamL, yamF, yamMin: yams.length ? Math.min(...yams) : null,
-    vfx: Number(val("#vfx")), hipfx: val("#hipfx") === "yes", otherfx: val("#otherfx") === "yes",
+    vfx: Number(val("#vfx")), vpain: Number(val("#vfx")) > 0 && val("#vpain") === "yes", hipfx: val("#hipfx") === "yes", otherfx: val("#otherfx") === "yes",
     cv: val("#cv"), dental: val("#dental") === "yes", prior: val("#prior"),
   };
 }
@@ -160,6 +164,10 @@ function check(id, c) {
   if (c.dental && (d.cls === "bp" || id === "DMAB" || id === "ROMO"))
     warn.push("侵襲的歯科治療の予定あり：開始前に歯科受診を。抜歯などでも原則として予防的休薬はしない（顎骨壊死ポジションペーパー2023）");
   if (id === "SERM" && c.sex !== "M") warn.push("静脈血栓塞栓症の既往・長期臥床がないか確認");
+  if (c.vpain && (id === "TPTD_D" || id === "TPTD_W")) {
+    warn.push(PAIN_NOTE);
+    if (!highRisk(c).length) warn.push("保険上の適応は「骨折の危険性の高い骨粗鬆症」。上の高リスクの目安（4条件）を満たすか確認");
+  }
   return { ex, warn };
 }
 
@@ -194,6 +202,18 @@ function orderMain(c, hr, dx) {
       : "骨折の危険性が特に高くはない：一般的なBPから開始";
   }
   if (c.prior === "serm" && !hr.length && c.sex === "F") list = ["SERM", ...list.filter((x) => x !== "SERM")];
+  // 椎体骨折による腰痛：テリパラチドの疼痛軽減の報告を重視して順位を上げる
+  if (c.vpain && ["none", "bp", "serm", "avd"].includes(c.prior)) {
+    if (hr.length) {
+      const tp = c.prior === "bp" ? ["TPTD_W", "TPTD_D"] : ["TPTD_D", "TPTD_W"];
+      list = [...tp, ...list.filter((x) => !tp.includes(x))];
+      why += "。椎体骨折による腰痛があるため、疼痛軽減の報告があるテリパラチドを先頭にした（ロモソズマブを優先してもよい）";
+    } else {
+      list = list.filter((x) => x !== "TPTD_D");
+      list.splice(1, 0, "TPTD_D");
+      why += "。椎体骨折による腰痛があるため、疼痛軽減の報告があるテリパラチドを次点に入れた";
+    }
+  }
   if (dx.treat === "cond") why = "骨量減少（条件付きで治療開始）。" + why;
   const ok = [], ng = [];
   for (const id of list.filter(Boolean)) {
@@ -333,6 +353,7 @@ function render() {
   const keys = new Set(["gl", "vd", "vdIns", "ckd"]);
   [...ok.slice(0, 3), ...ng].forEach((it) => { DRUGS[it.id].src.forEach((s) => keys.add(s)); companion(it.id, c).src.forEach((s) => keys.add(s)); });
   if (c.dental) keys.add("onj");
+  if (c.vpain) ["nass", "nevitt", "hadji"].forEach((k) => keys.add(k));
   if ((c.dialysis || (c.renal != null && c.renal < RENAL_SEVERE)) && ok.some((it) => it.id === "DMAB")) keys.add("fda");
   h += sources([...keys]);
   box.innerHTML = h;
