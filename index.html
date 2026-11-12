@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>骨粗鬆症 処方アシスト</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="骨粗鬆症">
+<meta name="theme-color" content="#6a4c93">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <h1>骨粗鬆症 処方アシスト</h1>
+  <button id="reset" type="button">リセット</button>
+</header>
+
+<main>
+  <section class="inputs">
+    <h2 class="sec">患者</h2>
+    <div class="grid">
+      <label>年齢<input id="age" class="num" inputmode="numeric" placeholder="歳"></label>
+      <label>性別
+        <select id="sex"><option value="">—</option><option value="F">女性</option><option value="M">男性</option></select>
+      </label>
+    </div>
+
+    <h2 class="sec">腎機能 <small>eGFR か、体重＋Cr（身長があればより正確）</small></h2>
+    <div class="grid">
+      <label>体重<input id="wt" class="num" inputmode="decimal" placeholder="kg"></label>
+      <label>身長<input id="ht" class="num" inputmode="decimal" placeholder="cm"></label>
+      <label>Cr<input id="cr" class="num" inputmode="decimal" placeholder="mg/dL"></label>
+      <label>eGFR<input id="egfr" class="num" inputmode="decimal" placeholder="直接入力"></label>
+    </div>
+    <p id="renalcalc" class="calc"></p>
+    <div class="grid">
+      <label>透析
+        <select id="dialysis"><option value="no">なし</option><option value="yes">あり</option></select>
+      </label>
+    </div>
+
+    <h2 class="sec">検査値</h2>
+    <div class="grid">
+      <label>補正Ca<input id="ca" class="num" inputmode="decimal" placeholder="mg/dL"></label>
+      <label>25(OH)D<input id="vd" class="num" inputmode="decimal" placeholder="ng/mL"></label>
+      <label>YAM 腰椎<input id="yamL" class="num" inputmode="decimal" placeholder="%"></label>
+      <label>YAM 大腿骨<input id="yamF" class="num" inputmode="decimal" placeholder="%"></label>
+    </div>
+
+    <h2 class="sec">既存骨折（脆弱性）</h2>
+    <div class="grid">
+      <label>椎体
+        <select id="vfx"><option value="0">なし</option><option value="1">1個</option><option value="2">2個以上</option></select>
+      </label>
+      <label>大腿骨近位部
+        <select id="hipfx"><option value="no">なし</option><option value="yes">あり</option></select>
+      </label>
+      <label class="wide">その他（橈骨遠位端・上腕骨近位端・骨盤・肋骨・下腿など）
+        <select id="otherfx"><option value="no">なし</option><option value="yes">あり</option></select>
+      </label>
+    </div>
+
+    <h2 class="sec">背景</h2>
+    <div class="grid">
+      <label class="wide">心筋梗塞・脳卒中の既往
+        <select id="cv"><option value="no">なし</option><option value="recent">あり（1年以内）</option><option value="old">あり（1年より前）</option></select>
+      </label>
+      <label class="wide">侵襲的歯科治療（抜歯など）の予定
+        <select id="dental"><option value="no">なし</option><option value="yes">あり</option></select>
+      </label>
+      <label class="wide">前治療歴
+        <select id="prior">
+          <option value="none">なし（初回治療）</option>
+          <option value="bp">ビスホスホネート使用中・使用歴</option>
+          <option value="dmab">デノスマブ使用中</option>
+          <option value="romo">ロモソズマブ 12か月終了</option>
+          <option value="pth">テリパラチド／アバロパラチド 終了</option>
+          <option value="serm">SERM 使用中</option>
+          <option value="avd">活性型ビタミンDのみ</option>
+        </select>
+      </label>
+    </div>
+  </section>
+
+  <section id="results">
+    <p class="hint">年齢・性別・腎機能・骨密度（または骨折）を入れると結果が出ます。</p>
+  </section>
+</main>
+
+<footer>
+  <p>判定は骨粗鬆症の予防と治療ガイドライン・各薬剤の添付文書に基づく目安です（根拠は各項目の「出典」）。腎機能は添付文書の多くがCcr基準のため、体重とCrがあればCockcroft-Gault式のCcrで判定し、無ければeGFRで代用します。入力内容は保存・送信されません。最終判断は診察と最新の添付文書で行うこと。</p>
+  <p id="ver"></p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
