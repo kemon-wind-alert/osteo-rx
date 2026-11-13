@@ -1,6 +1,6 @@
 // オフライン対応：一度開いたらファイルをスマホ内に保存し、電波が無くても動く。
 // 表示は保存済みのものを即座に使い（速さ優先）、裏で最新版を取りに行って次回から反映する。
-const CACHE = "osteo-v2";
+const CACHE = "osteo-v3";
 const SHELL = [
   "./", "index.html", "style.css", "app.js", "manifest.webmanifest",
   "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png",

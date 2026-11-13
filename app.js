@@ -4,7 +4,7 @@
 // 添付文書に数値の無い区切り（腎機能30など）は「アプリの目安」として画面に明示する。
 "use strict";
 
-const APP_VERSION = "0.3.1";
+const APP_VERSION = "0.4.0";
 const CA_LOW = 8.8;   // 血清Ca 共用基準範囲の下限（JCCLS、病院資料経由で確認）
 const CA_HIGH = 10.1; // 同 上限
 const RENAL_SEVERE = 30; // アプリの目安（Ccr/eGFR）：デノタス→活性型VitD、BP/ロモの低Ca警告（添付文書のeGFR<30記載に合わせた）
@@ -23,7 +23,7 @@ const val = (id) => $(id).value;
 
 // ---------- 出典 ----------
 const SRC = {
-  gl: { t: "骨粗鬆症の予防と治療ガイドライン2025年版（日本骨粗鬆症学会・日本骨代謝学会・骨粗鬆症財団、ライフサイエンス出版 2025）診断基準p49・治療開始基準p91・逐次療法p146-157・高リスクp155-156・SERM p92/p135-138・ビタミンK2 p119-121・透析p184-185", u: "http://www.josteo.com/data/publications/guideline/2025_01.pdf" },
+  gl: { t: "骨粗鬆症の予防と治療ガイドライン2025年版（日本骨粗鬆症学会・日本骨代謝学会・骨粗鬆症財団、ライフサイエンス出版 2025）診断基準p49・治療開始基準p91・薬剤選択p92-93・各薬のCQ p116-150・併用療法p152・逐次療法p146-157・図5-1 p156・付表1 p245・SERM p92/p135-138・ビタミンK2 p119-121・透析p184-185", u: "http://www.josteo.com/data/publications/guideline/2025_01.pdf" },
   aln: { t: "ボナロン錠35mg 添付文書 2023年1月 第3版（点滴静注900μg・経口ゼリーも同版）", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00052131" },
   ris: { t: "ベネット錠17.5mg 添付文書 2026年3月 第6版（75mgも同版）", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00052876" },
   min: { t: "リカルボン錠50mg 添付文書 2026年1月 第5版", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00059758" },
@@ -79,6 +79,21 @@ const DRUGS = {
     notes: ["閉経後女性のみ", "禁忌：静脈血栓塞栓症（既往含む）、長期不動、抗リン脂質抗体症候群"] },
 };
 
+// 選択の根拠（GL2025の各CQ。推奨＝強い、提案＝弱い）
+const BASIS = {
+  ALN: "骨折抑制を「推奨」・エビデンスA（CQ15 p126）。椎体RR 0.55・非椎体0.77・大腿骨近位部0.47と全部位で抑制。BPの中で先頭にした理由：リセドロン酸と同格（ともに推奨A・大腿骨まで抑制）だが、活性型ビタミンD併用で骨折抑制が示されたのはアレンドロン酸のみ（JOINT-02, p152）、剤形（週1錠・ゼリー・4週1回点滴）が多い",
+  RIS: "骨折抑制を「推奨」・エビデンスA（CQ17 p128）。大腿骨近位部骨折RR 0.7（HIP試験）。アレンドロン酸と同格で、月1回製剤がある",
+  ZOL: "骨折抑制を「推奨」・エビデンスA（CQ23 p134）。椎体RR 0.38・非椎体0.79・大腿骨近位部0.60。年1回点滴なので内服が難しい・飲み忘れが多い人に向く。経口BPの後ろに置いたのは点滴・急性期反応・腎機能の制約のため",
+  MIN: "骨折抑制は「提案」・エビデンスA（CQ19 p130）。大腿骨近位部骨折の抑制効果の報告が無いため、アレンドロン酸・リセドロン酸・ゾレドロン酸より下位",
+  IBN: "骨折抑制は「提案」・エビデンスC（CQ21 p132）。大腿骨近位部骨折の抑制効果の論文が無いため下位。月1回静注は内服が難しい人の選択肢",
+  DMAB: "骨折抑制を「推奨」・エビデンスA（CQ37 p148）。図5-1ではBPと並ぶ第一選択。BPより後ろに置いたのは、中止すると多発椎体骨折が起こり得て（p148）止めるときはBPへの切替が必須のため。腎機能低下ではBPより使いやすい",
+  SERM: "骨折抑制は「提案」・エビデンスA（CQ25・27）。椎体骨折は減らす（MORE試験RR 0.7）が非椎体骨折の抑制根拠は無い。閉経後早期で椎体骨折が無い人の第一選択の一つ（p92）",
+  ROMO: "骨折抑制を「推奨」・エビデンスA（CQ39 p150）。大腿骨近位部骨折リスクが高い人の第一選択薬の一つ（p92）。1年以内の心筋梗塞・脳卒中は避ける",
+  TPTD_D: "骨折抑制は「提案」・エビデンスA（CQ31 p141）。椎体骨折の抑制が良い適応（p92）",
+  TPTD_W: "骨折抑制は「提案」・エビデンスA（CQ33 p143）。椎体骨折の抑制が良い適応（p92）",
+  ABL: "骨折抑制は「提案」・エビデンスA（CQ35 p145）。椎体骨折の抑制が良い適応（p92）",
+};
+
 // ---------- 計算 ----------
 function renal(age, sex, wt, ht, cr, egfrIn, dialysis) {
   const out = { ccr: null, egfr: null, egfrRaw: null, use: null, useLabel: "", text: "" };
@@ -114,9 +129,31 @@ function collect() {
     renal: dialysis ? 0 : rn.use, // 透析は最重度として扱う
     ca: num("#ca"), vd: num("#vd"),
     yamL, yamF, yamMin: yams.length ? Math.min(...yams) : null,
-    vfx: Number(val("#vfx")), vpain: Number(val("#vfx")) > 0 && val("#vpain") === "yes", hipfx: val("#hipfx") === "yes", otherfx: val("#otherfx") === "yes",
+    vfx: Number(val("#vfx")), vpain: Number(val("#vfx")) > 0 && val("#vpain") === "yes", hipfx: val("#hipfx") === "yes",
+    pelvis: val("#pelvisfx") === "yes",
+    otherfx: val("#otherfx") === "yes" || val("#pelvisfx") === "yes", // 診断基準（p49）では骨盤は「その他の脆弱性骨折」
+    recent: val("#fxrecent") === "recent",
     cv: val("#cv"), dental: val("#dental") === "yes", prior: val("#prior"),
   };
+}
+
+// YAM(%)→Tスコアの近似：GL2025 巻末付表1（女性・QDR）のSD/YAM比 腰椎L1-4 0.112/0.989、大腿骨頚部 0.090/0.790 ≒ 11.3〜11.4%
+const SD_PCT = { L: 11.3, F: 11.4 };
+const tOf = (yam, site) => (yam - 100) / SD_PCT[site];
+const T_VLOW = { L: -3.0, F: -2.8 }; // 図5-1「Tスコアが非常に低い」
+const YAM_VLOW = { L: Math.round(100 + T_VLOW.L * SD_PCT.L), F: Math.round(100 + T_VLOW.F * SD_PCT.F) }; // 腰椎66%・大腿骨68%
+
+// GL2025 図5-1（ASBMR/BHOF 2024, p156）で骨形成促進薬が第一選択になる条件
+function fig51(c) {
+  const r = [];
+  const t25 = c.yamMin != null && c.yamMin <= 70; // YAM70%以下≒T−2.5以下（p155）
+  const mjr = [c.vfx > 0 && "椎体", c.pelvis && "骨盤", c.hipfx && "大腿骨近位部"].filter(Boolean).join("・");
+  if (mjr && c.recent) r.push(`2年以内の${mjr}骨折（差し迫った骨折リスク）`);
+  else if (mjr && t25) r.push(`${mjr}骨折＋YAM ${c.yamMin}%（70%以下≒T−2.5以下）`);
+  if (c.vfx >= 2 && !c.recent && !t25) r.push("椎体骨折2個以上（多発骨折の多くは差し迫ったリスク：図5-1注#2）");
+  if (c.yamL != null && c.yamL < YAM_VLOW.L) r.push(`腰椎YAM ${c.yamL}%（T−3.0未満の近似として${YAM_VLOW.L}%未満）`);
+  if (c.yamF != null && c.yamF < YAM_VLOW.F) r.push(`大腿骨YAM ${c.yamF}%（T−2.8未満の近似として${YAM_VLOW.F}%未満）`);
+  return r;
 }
 
 // 診断（GL2025 p49）と治療開始（p91）
@@ -167,20 +204,22 @@ function check(id, c) {
   if (c.dental && (d.cls === "bp" || id === "DMAB" || id === "ROMO"))
     warn.push("侵襲的歯科治療の予定あり：開始前に歯科受診を。抜歯などでも原則として予防的休薬はしない（顎骨壊死ポジションペーパー2023）");
   if (id === "SERM" && c.sex !== "M") warn.push("処方前に問診：静脈血栓塞栓症（深部静脈血栓症・肺塞栓症・網膜静脈血栓症）の既往、長期不動（術後・長期臥床）、抗リン脂質抗体症候群があれば禁忌");
-  if (c.vpain && (id === "TPTD_D" || id === "TPTD_W")) {
-    warn.push(PAIN_NOTE);
-    if (!highRisk(c).length) warn.push("保険上の適応は「骨折の危険性の高い骨粗鬆症」。上の高リスクの目安（4条件）を満たすか確認");
-  }
+  if (c.vpain && (id === "TPTD_D" || id === "TPTD_W")) warn.push(PAIN_NOTE);
+  if ((d.cls === "pth" || id === "ROMO") && !highRisk(c).length)
+    warn.push("添付文書の適用の目安（4条件）は満たさない：保険上の適応「骨折の危険性の高い骨粗鬆症」に当たるか確認（査定に注意）");
   return { ex, warn };
 }
 
 // ---------- 候補の順番 ----------
 function orderMain(c, hr, dx) {
   const sev = c.dialysis || (c.renal != null && c.renal < RENAL_SEVERE);
-  const fracVH = c.vfx > 0 || c.hipfx;
+  const mjr = c.vfx > 0 || c.hipfx || c.pelvis;
+  const an = fig51(c);
+  const t25 = c.yamMin != null && c.yamMin <= 70;
+  const BPDM = ["ALN", "RIS", "ZOL", "DMAB"]; // 図5-1「BPまたはデノスマブ」。BP内の順はCQ15/17/23（いずれも骨折抑制を推奨A・大腿骨近位部まで抑制）
   let list, why;
   if (c.prior === "dmab") {
-    list = ["DMAB", "ZOL", "ALN", hr.length ? "ROMO" : null];
+    list = ["DMAB", "ZOL", "ALN", an.length ? "ROMO" : null];
     why = "デノスマブ使用中：中止すると多発椎体骨折が起こりうるため継続が基本。やめる場合はBP（ゾレドロン酸・アレンドロン酸）へ切り替える（GL2025）";
   } else if (c.prior === "romo") {
     list = ["DMAB", "ALN", "ZOL"];
@@ -188,19 +227,26 @@ function orderMain(c, hr, dx) {
   } else if (c.prior === "pth") {
     list = ["DMAB", "ALN", "ZOL", "ROMO"];
     why = "PTH製剤の終了後はBP／デノスマブへつなぐ（GL2025）";
-  } else if (hr.length) {
-    list = c.prior === "bp" ? ["ROMO", "DMAB", "TPTD_W", "TPTD_D", "ABL", "ZOL"] : ["ROMO", "TPTD_D", "TPTD_W", "ABL", "DMAB", "ZOL"];
-    why = `骨折の危険性が高い（${hr.join("、")}）：骨形成促進薬から始めて骨吸収抑制薬へつなぐのが基本（GL2025）`;
-    if (c.prior === "bp") why += "。BP前治療後はロモソズマブ・デノスマブが推奨される順序で、BP→テリパラチドは効果が弱まる";
+  } else if (an.length) {
+    list = c.prior === "bp" ? ["ROMO", "DMAB", "TPTD_W", "TPTD_D", "ABL", "ZOL"] : ["ROMO", "TPTD_D", "TPTD_W", "ABL", "DMAB", "ZOL", "ALN"];
+    why = `GL2025 図5-1（p156）で骨形成促進薬が第一選択（${an.join("、")}）。骨形成促進薬から始めて骨吸収抑制薬へつなぐ（p93）`;
+    if (!hr.length) why += "。ただし添付文書の適用の目安（4条件）は満たさないので保険適応に注意";
+    if (c.prior === "bp") why += "。BP長期投与後はロモソズマブで腰椎・大腿骨とも骨密度が上がるが、テリパラチドでは大腿骨の骨密度が上がらない（ただしテリパラチドの骨折抑制効果は前治療BPの影響を受けない）（p153-154）";
   } else if (sev) {
     list = ["DMAB", "ALN", "IBN", "MIN"];
-    why = "重度の腎機能低下（アプリの目安：30未満）：リセドロン酸・ゾレドロン酸は禁忌。BPは低Caに注意しつつ慎重投与";
-  } else if (fracVH) {
-    list = ["DMAB", "ZOL", "ALN", "ROMO", "RIS"];
-    why = "椎体・大腿骨近位部骨折あり：GL2025の図5-1では骨形成促進薬も第一選択になりうる（添付文書の適用目安の4条件は満たさない）。骨吸収抑制薬を優先し、骨形成促進薬も選択肢";
+    why = "重度の腎機能低下（アプリの目安：30未満）：リセドロン酸・ゾレドロン酸は禁忌（表6-7）。BPは低Caに注意しつつ慎重投与";
+  } else if (c.otherfx && c.recent && t25) {
+    list = ["ALN", "ROMO", "RIS", "ZOL", "DMAB"];
+    why = `2年以内のその他の脆弱性骨折＋YAM ${c.yamMin}%：図5-1は「骨折部位とTスコアにより骨形成促進薬、BPまたはデノスマブ」（どの部位なら骨形成促進薬かはコンセンサス無し）。BPを第1候補、骨形成促進薬を次点に`;
+  } else if (mjr) {
+    list = [...BPDM, "ROMO", "TPTD_D"];
+    why = "椎体・骨盤・大腿骨近位部骨折あり（2年より前、YAM 70%超）：図5-1に該当する欄は無い。p92に従い大腿骨近位部骨折の抑制根拠があるBP・デノスマブを優先";
+  } else if (c.otherfx && t25) {
+    list = [...BPDM, "SERM", "MIN", "IBN"];
+    why = `その他の脆弱性骨折（2年より前）＋YAM ${c.yamMin}%：図5-1では「ほとんどの患者でBPまたはデノスマブを第一選択」`;
   } else {
     // GL2025 図5-1（ASBMR/BHOF 2024引用）：骨折なしで腰椎・大腿骨いずれかがT≦−2.5（YAM70%以下, p155）ならBPかデノスマブ
-    const sermFirst = c.prior !== "bp" && c.sex === "F" && c.age < SERM_AGE && c.yamMin != null && c.yamMin > 70;
+    const sermFirst = c.prior !== "bp" && c.sex === "F" && c.age < SERM_AGE && c.yamMin != null && c.yamMin > 70 && !(c.otherfx && c.recent);
     if (c.prior === "bp") {
       list = ["DMAB", "ALN", "ZOL", "SERM"];
       why = "BP使用中・使用歴あり：効果不十分ならBP→デノスマブが推奨される順序。経過良好ならBP継続、長期例は休薬も検討（休薬の対象はBPのみ）";
@@ -208,16 +254,16 @@ function orderMain(c, hr, dx) {
       list = ["SERM", "ALN", "RIS", "DMAB", "ZOL", "MIN", "IBN"];
       why = `閉経後早期（アプリの目安：${SERM_AGE}歳未満）で椎体・大腿骨近位部骨折なし、YAM 70%超（骨量減少の範囲）${c.yamF == null ? "※大腿骨YAM未入力" : ""}：GL2025 p92は長期の投薬継続を考えSERMを第一選択薬の一つとする。椎体骨折は減らすが非椎体骨折の抑制根拠は無い（CQ25・27）`;
     } else {
-      list = ["ALN", "RIS", "DMAB", "ZOL", "SERM", "MIN", "IBN"];
-      why = "骨折の危険性が特に高くはない：一般的なBPから開始";
+      list = [...BPDM, "SERM", "MIN", "IBN"];
+      why = "図5-1で骨形成促進薬が第一選択になる条件に当たらない：BPまたはデノスマブから開始";
       if (c.sex === "F" && c.age >= SERM_AGE) why += `（${SERM_AGE}歳以上は大腿骨近位部骨折が増えるため、その抑制根拠があるBPを優先）`;
       else if (c.yamMin != null && c.yamMin <= 70) why += `（YAM ${c.yamMin}%＝70%以下≒T−2.5以下で骨折なし：GL2025 図5-1では「ほとんどの患者にBPまたはデノスマブ」。骨密度上昇効果の高い薬を選ぶ）`;
     }
   }
-  if (c.prior === "serm" && !hr.length && c.sex === "F") list = ["SERM", ...list.filter((x) => x !== "SERM")];
+  if (c.prior === "serm" && !an.length && c.sex === "F") list = ["SERM", ...list.filter((x) => x !== "SERM")];
   // 椎体骨折による腰痛：テリパラチドの疼痛軽減の報告を重視して順位を上げる
   if (c.vpain && ["none", "bp", "serm", "avd"].includes(c.prior)) {
-    if (hr.length) {
+    if (an.length) {
       const tp = c.prior === "bp" ? ["TPTD_W", "TPTD_D"] : ["TPTD_D", "TPTD_W"];
       list = [...tp, ...list.filter((x) => !tp.includes(x))];
       why += "。椎体骨折による腰痛があるため、疼痛軽減の報告があるテリパラチドを先頭にした（ロモソズマブを優先してもよい）";
@@ -282,7 +328,8 @@ function companion(id, c) {
   // BP・ロモソズマブ・SERM：活性型ビタミンDを併用
   out.items.push(sev ? ALF : ELD);
   if (sev) out.notes.push(`腎機能低下（${c.dialysis ? "透析" : c.rn.useLabel + " " + r1(c.renal)}）：アルファカルシドールは腎での活性化が不要。エルデカルシトールでも用量規定は無いが、腎障害では投与初期にCaを頻回に測定（使い分けの区切り30はアプリの目安）`);
-  else out.notes.push("エルデカルシトールは高Ca血症が出たら休薬し、正常化後0.5μgで再開（0.5μgの骨折予防効果は未確立）。Caは3〜6か月ごとに測定");
+  if (d.cls === "bp") out.notes.push("BP＋活性型ビタミンDの併用は単剤より骨密度を上げ、骨折リスクを下げる可能性（GL2025 p152。骨折抑制が示されたのはアレンドロン酸＋アルファカルシドール：JOINT-02）");
+  if (!sev) out.notes.push("エルデカルシトールは高Ca血症が出たら休薬し、正常化後0.5μgで再開（0.5μgの骨折予防効果は未確立）。Caは3〜6か月ごとに測定");
   if (id === "ROMO") out.notes.unshift("ロモソズマブ投与中はCa・ビタミンDの補給が必須（添付文書）。食事のCaが少なければCa製剤も検討（デノタスはRANKL阻害薬専用で適応外）");
   if (vdLow) out.notes.push(`25(OH)D ${c.vd}（欠乏）：天然型ビタミンDの補充も検討`);
   else if (vdIns) out.notes.push(`25(OH)D ${c.vd}（不足）`);
@@ -299,6 +346,7 @@ function drugCard(item, c, rank) {
   return `<div class="card ${rank === 0 ? "first" : ""}">
     <div class="drug">${esc(d.name)}</div>
     <div class="dose">${esc(d.dose)}</div>
+    ${BASIS[item.id] ? `<div class="why">選択の根拠：${esc(BASIS[item.id])}（GL2025）</div>` : ""}
     ${notes.length ? `<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
     <div class="plus">
       <div class="why">＋ 併用${item.id === "DMAB" || item.id === "ROMO" ? "（添付文書上 必要）" : d.cls === "pth" ? "" : "（検討）"}</div>
@@ -324,7 +372,8 @@ function render() {
   // 要約
   const badges = [];
   badges.push(`<span class="badge ${dx.treat === "yes" ? "ok" : ""}">${esc(dx.dx)}</span>`);
-  if (hr.length) badges.push(`<span class="badge high">骨折高リスク</span>`);
+  if (fig51(c).length) badges.push(`<span class="badge high">骨形成促進薬が第一選択（GL図5-1）</span>`);
+  if (hr.length) badges.push(`<span class="badge high">添付文書の4条件を満たす</span>`);
   if (c.renal != null || c.dialysis) badges.push(`<span class="badge">${c.dialysis ? "透析" : esc(c.rn.useLabel) + " " + r1(c.renal)}</span>`);
   if (c.vd != null) badges.push(`<span class="badge">25(OH)D ${c.vd}：${c.vd < 20 ? "欠乏" : c.vd < 30 ? "不足" : "充足"}</span>`);
   if (c.ca != null) badges.push(`<span class="badge">補正Ca ${c.ca}${c.ca < CA_LOW ? "（低）" : c.ca > CA_HIGH ? "（高）" : ""}</span>`);
@@ -362,6 +411,7 @@ function render() {
     h += `<h3 class="rank">使えない・避ける</h3><ul class="excluded">${ng.map((it) => `<li><b>${esc(DRUGS[it.id].name)}</b>：${esc(it.ex.join("／"))}</li>`).join("")}</ul>`;
   }
   if (hr.length || c.vfx > 0) h += `<div class="caution">椎体骨折のSQ法グレード3も骨形成促進薬の適用の目安（入力項目には無いので画像で確認）。</div>`;
+  h += `<div class="caution">YAMからTスコアへの換算は近似（GL2025巻末付表1 女性・QDRのSD/YAM比≒11.3〜11.4%で計算。機種・部位で数%ずれる）。腰椎${YAM_VLOW.L}%≒T−3.0、大腿骨${YAM_VLOW.F}%≒T−2.8、YAM70%≒T−2.5（p155）。境界付近はDXAのTスコアで確認。</div>`;
   h += `<div class="caution">${esc(VK_NOTE)}</div>`;
 
   const keys = new Set(["gl", "vd", "vdIns", "ckd", "vk"]);
