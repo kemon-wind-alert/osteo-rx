@@ -4,7 +4,7 @@
 // 添付文書に数値の無い区切り（腎機能30など）は「アプリの目安」として画面に明示する。
 "use strict";
 
-const APP_VERSION = "0.2.0";
+const APP_VERSION = "0.3.0";
 const CA_LOW = 8.8;   // 血清Ca 共用基準範囲の下限（JCCLS、病院資料経由で確認）
 const CA_HIGH = 10.1; // 同 上限
 const RENAL_SEVERE = 30; // アプリの目安（Ccr/eGFR）：デノタス→活性型VitD、BP/ロモの低Ca警告（添付文書のeGFR<30記載に合わせた）
@@ -23,7 +23,7 @@ const val = (id) => $(id).value;
 
 // ---------- 出典 ----------
 const SRC = {
-  gl: { t: "骨粗鬆症の予防と治療ガイドライン2025年版（日本骨粗鬆症学会・日本骨代謝学会・骨粗鬆症財団、ライフサイエンス出版 2025）診断基準p49・治療開始基準p91・逐次療法p146-157・高リスクp155-156・透析p184", u: "http://www.josteo.com/data/publications/guideline/2025_01.pdf" },
+  gl: { t: "骨粗鬆症の予防と治療ガイドライン2025年版（日本骨粗鬆症学会・日本骨代謝学会・骨粗鬆症財団、ライフサイエンス出版 2025）診断基準p49・治療開始基準p91・逐次療法p146-157・高リスクp155-156・SERM p92/p135-138・ビタミンK2 p119-121・透析p184-185", u: "http://www.josteo.com/data/publications/guideline/2025_01.pdf" },
   aln: { t: "ボナロン錠35mg 添付文書 2023年1月 第3版（点滴静注900μg・経口ゼリーも同版）", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00052131" },
   ris: { t: "ベネット錠17.5mg 添付文書 2026年3月 第6版（75mgも同版）", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00052876" },
   min: { t: "リカルボン錠50mg 添付文書 2026年1月 第5版", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00059758" },
@@ -45,12 +45,15 @@ const SRC = {
   nass: { t: "North American Spine Society. Diagnosis and Treatment of Adults with Osteoporotic Vertebral Fractures（2024）：急性期の骨粗鬆症性椎体骨折にテリパラチドを疼痛緩和・QOL改善のため提案（Grade B）", u: "https://north-american-spine-society.foleon.com/ebooks-research/osteoporotic-vertebral-fractures-clinical-guidelines/summary-of-questions-recommendations" },
   nevitt: { t: "Nevitt MC, et al. Reduced risk of back pain following teriparatide treatment: a meta-analysis. Osteoporos Int 2006;17:273-280", u: "https://pubmed.ncbi.nlm.nih.gov/16142502/" },
   hadji: { t: "Hadji P, et al. The effect of teriparatide compared with risedronate on reduction of back pain in postmenopausal women with osteoporotic vertebral fractures. Osteoporos Int 2012", u: "https://link.springer.com/article/10.1007/s00198-011-1856-y" },
+  vk: { t: "グラケーカプセル15mg 電子添文 2025年6月 第2版（効能：骨粗鬆症における骨量・疼痛の改善。禁忌：ワルファリン投与中）", u: "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/170033_3160002M2028_1_15" },
   ckd: { t: "日本腎臓学会 CKD診療ガイド2012（eGFR式）", u: "https://jsn.or.jp/guideline/pdf/CKDguide2012.pdf" },
 };
 
 // ---------- 主薬 ----------
 const ORAL_BP_NOTE = "経口薬は起床時に水約180mLで服用し、30分は横にならず飲食を避ける。食道通過障害・30分座位不可は禁忌（→点滴・静注製剤へ）";
 const PAIN_NOTE = "椎体骨折の腰痛：北米脊椎学会GL（2024）は急性期の疼痛緩和・QOL改善にテリパラチドを提案（Grade B）、メタ解析でも新規・増悪腰痛が少ない。ただしリセドロン酸との直接比較RCTでは6か月の腰痛改善に差はなく、6〜18か月の腰痛悪化が少なかった";
+const VK_NOTE = "ビタミンK2（メナテトレノン：グラケー 15mgを1日3回 食後、45mg/日）：腰椎の骨密度を上げる目的なら追加の選択肢（GL2025 CQ10 提案）。ucOCの値は使用条件ではない。骨折抑制のエビデンスは無く、骨折予防目的では投与しないことを提案（CQ11）。ワルファリン服用中は禁忌";
+const SERM_AGE = 70; // 閉経後早期の目安（GL2025に数値なし。アプリの目安）
 const DRUGS = {
   ROMO: { name: "ロモソズマブ（イベニティ）", dose: "210mg（105mg×2本）を月1回 皮下注、12か月まで", cls: "anabolic", src: ["romo", "gl"],
     notes: ["投与中はCa・ビタミンDの補給が必要。投与後2週〜1か月でCaが下がるので測定する", "終了後は骨吸収抑制薬（アレンドロン酸・デノスマブ）へつなぐ（GL2025）"] },
@@ -163,7 +166,7 @@ function check(id, c) {
   if (id === "ROMO" && c.cv === "old") warn.push("心筋梗塞・脳卒中の既往あり（1年より前）：リスクとベネフィットを慎重に判断");
   if (c.dental && (d.cls === "bp" || id === "DMAB" || id === "ROMO"))
     warn.push("侵襲的歯科治療の予定あり：開始前に歯科受診を。抜歯などでも原則として予防的休薬はしない（顎骨壊死ポジションペーパー2023）");
-  if (id === "SERM" && c.sex !== "M") warn.push("静脈血栓塞栓症の既往・長期臥床がないか確認");
+  if (id === "SERM" && c.sex !== "M") warn.push("処方前に問診：静脈血栓塞栓症（深部静脈血栓症・肺塞栓症・網膜静脈血栓症）の既往、長期不動（術後・長期臥床）、抗リン脂質抗体症候群があれば禁忌");
   if (c.vpain && (id === "TPTD_D" || id === "TPTD_W")) {
     warn.push(PAIN_NOTE);
     if (!highRisk(c).length) warn.push("保険上の適応は「骨折の危険性の高い骨粗鬆症」。上の高リスクの目安（4条件）を満たすか確認");
@@ -196,10 +199,19 @@ function orderMain(c, hr, dx) {
     list = ["DMAB", "ZOL", "ALN", "ROMO", "RIS"];
     why = "椎体・大腿骨近位部骨折あり：GL2025の図5-1では骨形成促進薬も第一選択になりうる（添付文書の適用目安の4条件は満たさない）。骨吸収抑制薬を優先し、骨形成促進薬も選択肢";
   } else {
-    list = c.prior === "bp" ? ["DMAB", "ALN", "ZOL", "SERM"] : ["ALN", "RIS", "DMAB", "ZOL", "SERM", "MIN", "IBN"];
-    why = c.prior === "bp"
-      ? "BP使用中・使用歴あり：効果不十分ならBP→デノスマブが推奨される順序。経過良好ならBP継続、長期例は休薬も検討（休薬の対象はBPのみ）"
-      : "骨折の危険性が特に高くはない：一般的なBPから開始";
+    const sermFirst = c.prior !== "bp" && c.sex === "F" && c.age < SERM_AGE && (c.yamF == null || c.yamF > 70);
+    if (c.prior === "bp") {
+      list = ["DMAB", "ALN", "ZOL", "SERM"];
+      why = "BP使用中・使用歴あり：効果不十分ならBP→デノスマブが推奨される順序。経過良好ならBP継続、長期例は休薬も検討（休薬の対象はBPのみ）";
+    } else if (sermFirst) {
+      list = ["SERM", "ALN", "RIS", "DMAB", "ZOL", "MIN", "IBN"];
+      why = `閉経後早期（アプリの目安：${SERM_AGE}歳未満）で椎体・大腿骨近位部骨折なし${c.yamF == null ? "（大腿骨YAM未入力）" : "、大腿骨YAM 70%超"}：GL2025 p92は長期の投薬継続を考えSERMを第一選択薬の一つとする。椎体骨折は減らすが非椎体骨折の抑制根拠は無い（CQ25・27）`;
+    } else {
+      list = ["ALN", "RIS", "DMAB", "ZOL", "SERM", "MIN", "IBN"];
+      why = "骨折の危険性が特に高くはない：一般的なBPから開始";
+      if (c.sex === "F" && c.age >= SERM_AGE) why += `（${SERM_AGE}歳以上は大腿骨近位部骨折が増えるため、その抑制根拠があるBPを優先）`;
+      else if (c.sex === "F" && c.yamF != null && c.yamF <= 70) why += "（大腿骨YAM 70%以下：大腿骨近位部骨折の抑制根拠があるBPを優先。GL2025 p92）";
+    }
   }
   if (c.prior === "serm" && !hr.length && c.sex === "F") list = ["SERM", ...list.filter((x) => x !== "SERM")];
   // 椎体骨折による腰痛：テリパラチドの疼痛軽減の報告を重視して順位を上げる
@@ -349,8 +361,9 @@ function render() {
     h += `<h3 class="rank">使えない・避ける</h3><ul class="excluded">${ng.map((it) => `<li><b>${esc(DRUGS[it.id].name)}</b>：${esc(it.ex.join("／"))}</li>`).join("")}</ul>`;
   }
   if (hr.length || c.vfx > 0) h += `<div class="caution">椎体骨折のSQ法グレード3も骨形成促進薬の適用の目安（入力項目には無いので画像で確認）。</div>`;
+  h += `<div class="caution">${esc(VK_NOTE)}</div>`;
 
-  const keys = new Set(["gl", "vd", "vdIns", "ckd"]);
+  const keys = new Set(["gl", "vd", "vdIns", "ckd", "vk"]);
   [...ok.slice(0, 3), ...ng].forEach((it) => { DRUGS[it.id].src.forEach((s) => keys.add(s)); companion(it.id, c).src.forEach((s) => keys.add(s)); });
   if (c.dental) keys.add("onj");
   if (c.vpain) ["nass", "nevitt", "hadji"].forEach((k) => keys.add(k));
