@@ -4,7 +4,7 @@
 // 添付文書に数値の無い区切り（腎機能30など）は「アプリの目安」として画面に明示する。
 "use strict";
 
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.3.1";
 const CA_LOW = 8.8;   // 血清Ca 共用基準範囲の下限（JCCLS、病院資料経由で確認）
 const CA_HIGH = 10.1; // 同 上限
 const RENAL_SEVERE = 30; // アプリの目安（Ccr/eGFR）：デノタス→活性型VitD、BP/ロモの低Ca警告（添付文書のeGFR<30記載に合わせた）
@@ -199,18 +199,19 @@ function orderMain(c, hr, dx) {
     list = ["DMAB", "ZOL", "ALN", "ROMO", "RIS"];
     why = "椎体・大腿骨近位部骨折あり：GL2025の図5-1では骨形成促進薬も第一選択になりうる（添付文書の適用目安の4条件は満たさない）。骨吸収抑制薬を優先し、骨形成促進薬も選択肢";
   } else {
-    const sermFirst = c.prior !== "bp" && c.sex === "F" && c.age < SERM_AGE && (c.yamF == null || c.yamF > 70);
+    // GL2025 図5-1（ASBMR/BHOF 2024引用）：骨折なしで腰椎・大腿骨いずれかがT≦−2.5（YAM70%以下, p155）ならBPかデノスマブ
+    const sermFirst = c.prior !== "bp" && c.sex === "F" && c.age < SERM_AGE && c.yamMin != null && c.yamMin > 70;
     if (c.prior === "bp") {
       list = ["DMAB", "ALN", "ZOL", "SERM"];
       why = "BP使用中・使用歴あり：効果不十分ならBP→デノスマブが推奨される順序。経過良好ならBP継続、長期例は休薬も検討（休薬の対象はBPのみ）";
     } else if (sermFirst) {
       list = ["SERM", "ALN", "RIS", "DMAB", "ZOL", "MIN", "IBN"];
-      why = `閉経後早期（アプリの目安：${SERM_AGE}歳未満）で椎体・大腿骨近位部骨折なし${c.yamF == null ? "（大腿骨YAM未入力）" : "、大腿骨YAM 70%超"}：GL2025 p92は長期の投薬継続を考えSERMを第一選択薬の一つとする。椎体骨折は減らすが非椎体骨折の抑制根拠は無い（CQ25・27）`;
+      why = `閉経後早期（アプリの目安：${SERM_AGE}歳未満）で椎体・大腿骨近位部骨折なし、YAM 70%超（骨量減少の範囲）${c.yamF == null ? "※大腿骨YAM未入力" : ""}：GL2025 p92は長期の投薬継続を考えSERMを第一選択薬の一つとする。椎体骨折は減らすが非椎体骨折の抑制根拠は無い（CQ25・27）`;
     } else {
       list = ["ALN", "RIS", "DMAB", "ZOL", "SERM", "MIN", "IBN"];
       why = "骨折の危険性が特に高くはない：一般的なBPから開始";
       if (c.sex === "F" && c.age >= SERM_AGE) why += `（${SERM_AGE}歳以上は大腿骨近位部骨折が増えるため、その抑制根拠があるBPを優先）`;
-      else if (c.sex === "F" && c.yamF != null && c.yamF <= 70) why += "（大腿骨YAM 70%以下：大腿骨近位部骨折の抑制根拠があるBPを優先。GL2025 p92）";
+      else if (c.yamMin != null && c.yamMin <= 70) why += `（YAM ${c.yamMin}%＝70%以下≒T−2.5以下で骨折なし：GL2025 図5-1では「ほとんどの患者にBPまたはデノスマブ」。骨密度上昇効果の高い薬を選ぶ）`;
     }
   }
   if (c.prior === "serm" && !hr.length && c.sex === "F") list = ["SERM", ...list.filter((x) => x !== "SERM")];
