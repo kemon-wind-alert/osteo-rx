@@ -4,9 +4,11 @@
 // 添付文書に数値の無い区切り（腎機能30など）は「アプリの目安」として画面に明示する。
 "use strict";
 
-const APP_VERSION = "0.5.0";
+const APP_VERSION = "0.6.0";
 const CA_LOW = 8.8;   // 血清Ca 共用基準範囲の下限（JCCLS、病院資料経由で確認）
 const CA_HIGH = 10.1; // 同 上限
+const FRAX_CUT = 15;    // 骨量減少の治療開始：FRAX主要骨折10年確率（GL2025 p90-91）
+const FRAX_MAX_AGE = 75; // FRAXの基準は75歳未満に適用（GL2025 図4-2 #5）
 const RENAL_SEVERE = 30; // アプリの目安（Ccr/eGFR）：デノタス→活性型VitD、BP/ロモの低Ca警告（添付文書のeGFR<30記載に合わせた）
 
 const $ = (s) => document.querySelector(s);
@@ -23,7 +25,7 @@ const val = (id) => $(id).value;
 
 // ---------- 出典 ----------
 const SRC = {
-  gl: { t: "骨粗鬆症の予防と治療ガイドライン2025年版（日本骨粗鬆症学会・日本骨代謝学会・骨粗鬆症財団、ライフサイエンス出版 2025）診断基準p49・治療開始基準p91・薬剤選択p92-93・各薬のCQ p116-150・併用療法p152・逐次療法p146-157・図5-1 p156・付表1 p245・SERM p92/p135-138・ビタミンK2 p119-121・透析p184-185", u: "http://www.josteo.com/data/publications/guideline/2025_01.pdf" },
+  gl: { t: "骨粗鬆症の予防と治療ガイドライン2025年版（日本骨粗鬆症学会・日本骨代謝学会・骨粗鬆症財団、ライフサイエンス出版 2025）診断基準p49・治療開始基準p89-91（骨量減少とFRAX p90）・薬剤選択p92-93・各薬のCQ p116-150（活性型ビタミンD p115-118、骨量減少へのゾレドロン酸 p134）・ビタミンDの高Ca血症p158・併用療法p152・逐次療法p146-157・図5-1 p156・付表1 p245・SERM p92/p135-138・ビタミンK2 p119-121・透析p184-185", u: "http://www.josteo.com/data/publications/guideline/2025_01.pdf" },
   aln: { t: "ボナロン錠35mg 添付文書 2023年1月 第3版（点滴静注900μg・経口ゼリーも同版）", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00052131" },
   ris: { t: "ベネット錠17.5mg 添付文書 2026年3月 第6版（75mgも同版）", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00052876" },
   min: { t: "リカルボン錠50mg 添付文書 2026年1月 第5版", u: "https://www.kegg.jp/medicus-bin/japic_med?japic_code=00059758" },
@@ -46,6 +48,10 @@ const SRC = {
   nevitt: { t: "Nevitt MC, et al. Reduced risk of back pain following teriparatide treatment: a meta-analysis. Osteoporos Int 2006;17:273-280", u: "https://pubmed.ncbi.nlm.nih.gov/16142502/" },
   hadji: { t: "Hadji P, et al. The effect of teriparatide compared with risedronate on reduction of back pain in postmenopausal women with osteoporotic vertebral fractures. Osteoporos Int 2012", u: "https://link.springer.com/article/10.1007/s00198-011-1856-y" },
   vk: { t: "グラケーカプセル15mg 電子添文 2025年6月 第2版（効能：骨粗鬆症における骨量・疼痛の改善。禁忌：ワルファリン投与中）", u: "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/170033_3160002M2028_1_15" },
+  reid: { t: "Reid IR, et al. Fracture Prevention with Zoledronate in Older Women with Osteopenia. N Engl J Med 2018;379:2407-2416（65歳以上・大腿骨Tスコア−1.0〜−2.5の女性2,000人、ゾレドロン酸5mgを18か月ごと4回、6年）", u: "https://pubmed.ncbi.nlm.nih.gov/30575489/" },
+  bhof: { t: "LeBoff MS, et al. The clinician's guide to prevention and treatment of osteoporosis（米国BHOF）. Osteoporos Int 2022;33:2049-2102：骨量減少の治療閾値（米国版FRAXで大腿骨近位部3%以上または主要骨折20%以上）", u: "https://pmc.ncbi.nlm.nih.gov/articles/PMC9546973/" },
+  acp: { t: "Qaseem A, et al. Pharmacologic Treatment of Primary Osteoporosis or Low Bone Mass to Prevent Fractures in Adults: A Living Clinical Guideline From the American College of Physicians. Ann Intern Med 2023;176:224-238（推奨4：65歳超の骨量減少女性）", u: "https://pubmed.ncbi.nlm.nih.gov/36592456/" },
+  kanis: { t: "Kanis JA, et al. European guidance for the diagnosis and management of osteoporosis in postmenopausal women. Osteoporos Int 2019;30:3-44（Vitamin D derivatives の項）", u: "https://doi.org/10.1007/s00198-018-4704-5" },
   ckd: { t: "日本腎臓学会 CKD診療ガイド2012（eGFR式）", u: "https://jsn.or.jp/guideline/pdf/CKDguide2012.pdf" },
 };
 
@@ -77,13 +83,17 @@ const DRUGS = {
     notes: ["錠剤は服用後60分、横にならず飲食を避ける"] },
   SERM: { name: "SERM（ラロキシフェン／バゼドキシフェン）", dose: "ラロキシフェン60mg または バゼドキシフェン20mg を1日1回 内服", cls: "serm", src: ["serm", "gl"],
     notes: ["閉経後女性のみ", "禁忌：静脈血栓塞栓症（既往含む）、長期不動、抗リン脂質抗体症候群"] },
+  ELD_M: { name: "エルデカルシトール（エディロール）単独", dose: "0.75μgを1日1回 内服", cls: "avd", src: ["eld", "gl"],
+    notes: ["高Ca血症の頻度が比較的高く、腎機能低下例・高齢者・夏場の脱水時に起こりやすい（GL2025 p158）。Caは3〜6か月ごと（開始初期はより頻回）に測定", "高Ca血症が出たら休薬し、正常化後0.5μgで再開（0.5μgの骨折予防効果は未確立）"] },
+  ALF_M: { name: "アルファカルシドール（アルファロール／ワンアルファ）単独", dose: "0.5〜1.0μgを1日1回 内服（0.5μgから開始）", cls: "avd", src: ["alf", "gl"],
+    notes: ["腎機能低下では尿へのCa排泄が減り血清Caが直接上がるので過剰投与に注意（GL2025 p93）。Caを定期的に測定し、高値なら減量・休薬"] },
 };
 
 // 選択の根拠（GL2025の各CQ。推奨＝強い、提案＝弱い）
 const BASIS = {
   ALN: "骨折抑制を「推奨」・エビデンスA（CQ15 p126）。椎体RR 0.55・非椎体0.77・大腿骨近位部0.47と全部位で抑制。BPの中で先頭にした理由：リセドロン酸と同格（ともに推奨A・大腿骨まで抑制）だが、活性型ビタミンD併用で骨折抑制が示されたのはアレンドロン酸のみ（JOINT-02, p152）、剤形（週1錠・ゼリー・4週1回点滴）が多い",
   RIS: "骨折抑制を「推奨」・エビデンスA（CQ17 p128）。大腿骨近位部骨折RR 0.7（HIP試験）。アレンドロン酸と同格で、月1回製剤がある",
-  ZOL: "骨折抑制を「推奨」・エビデンスA（CQ23 p134）。椎体RR 0.38・非椎体0.79・大腿骨近位部0.60。年1回点滴なので内服が難しい・飲み忘れが多い人に向く。経口BPの後ろに置いたのは点滴・急性期反応・腎機能の制約のため",
+  ZOL: "骨折抑制を「推奨」・エビデンスA（CQ23 p134）。椎体RR 0.38・非椎体0.79・大腿骨近位部0.60。年1回点滴なので内服が難しい・飲み忘れが多い人に向く。骨粗鬆症で経口BPの後ろに置いているのは点滴・急性期反応・腎機能の制約のため",
   MIN: "骨折抑制は「提案」・エビデンスA（CQ19 p130）。大腿骨近位部骨折の抑制効果の報告が無いため、アレンドロン酸・リセドロン酸・ゾレドロン酸より下位",
   IBN: "骨折抑制は「提案」・エビデンスC（CQ21 p132）。大腿骨近位部骨折の抑制効果の論文が無いため下位。月1回静注は内服が難しい人の選択肢",
   DMAB: "骨折抑制を「推奨」・エビデンスA（CQ37 p148）。大腿骨近位部骨折リスクが高い例の第一選択薬の一つ（p92）。BPより後ろに置いたのは、中止すると多発椎体骨折が起こり得て（p148）止めるときはBPへの切替が必須のため。腎機能低下ではBPより使いやすい",
@@ -92,7 +102,12 @@ const BASIS = {
   TPTD_D: "骨折抑制は「提案」・エビデンスA（CQ31 p141）。椎体骨折の抑制が良い適応（p92）",
   TPTD_W: "骨折抑制は「提案」・エビデンスA（CQ33 p143）。椎体骨折の抑制が良い適応（p92）",
   ABL: "骨折抑制は「提案」・エビデンスA（CQ35 p145）。椎体骨折の抑制が良い適応（p92）",
+  ELD_M: "骨密度上昇を「推奨」・エビデンスA（CQ41 p117）、骨折抑制は「提案」・エビデンスA（CQ42 p118）。椎体骨折をアルファカルシドールより減らす（RR 0.71）が、非椎体・大腿骨近位部骨折の抑制エビデンスは無い。椎体骨折のない早期の患者では活性型ビタミンD3薬の単独も選択肢（p92）",
+  ALF_M: "骨折抑制は「提案」・エビデンスC（CQ9 p116-117）。椎体骨折を減らす弱いエビデンスのみで、大腿骨近位部・非椎体骨折の抑制エビデンスは無い。単剤での使用は他剤が使えない場合に限定される（p117）",
 };
+
+// 骨量減少（骨折なし）で日本の開始基準を満たさないときに出す海外の根拠
+const ABROAD_NOTE = "米国BHOF（2022）は、大腿骨のTスコア−1.0〜−2.5で、FRAXの10年確率が大腿骨近位部3%以上または主要骨折20%以上なら薬物治療を勧める（米国版FRAXで決めた閾値で、日本版FRAXの値にそのまま使えるとは限らない）。65歳以上の骨量減少女性2,000人（平均71歳、大腿骨頚部T平均−1.6）のRCTでは、ゾレドロン酸5mgを18か月ごと4回で脆弱性骨折が減った（HR 0.63、6年間でNNT 15：Reid, NEJM 2018）。米国内科学会（ACP 2023）は65歳超の骨量減少女性へのBP開始を「個別に判断」とする（条件付き推奨・確実性は低い）。活性型ビタミンDの単独は、BHOF・ACPには記載が無く、欧州ガイダンス（2019）は「一部の国で使われる。問題は高Ca血症・高Ca尿症」とする（エルデカルシトールの記載は無い）";
 
 // ---------- 計算 ----------
 function renal(age, sex, wt, ht, cr, egfrIn, dialysis) {
@@ -131,6 +146,7 @@ function collect() {
     yamL, yamF, yamMin: yams.length ? Math.min(...yams) : null,
     vfx: Number(val("#vfx")), vpain: Number(val("#vfx")) > 0 && val("#vpain") === "yes", hipfx: val("#hipfx") === "yes",
     otherfx: val("#otherfx") === "yes",
+    famhx: val("#famhx") === "yes", frax: num("#frax"),
     cv: val("#cv"), dental: val("#dental") === "yes", prior: val("#prior"),
   };
 }
@@ -156,7 +172,16 @@ function diagnose(c) {
   if (c.yamMin == null) return { dx: "判定保留", treat: "unknown", why: "YAMを入力してください" };
   if (c.otherfx && c.yamMin < 80) return { dx: "骨粗鬆症", treat: "yes", why: `その他の脆弱性骨折＋YAM ${c.yamMin}%（80%未満）` };
   if (c.yamMin <= 70) return { dx: "骨粗鬆症", treat: "yes", why: `YAM ${c.yamMin}%（70%以下）` };
-  if (c.yamMin < 80) return { dx: "骨量減少", treat: "cond", why: `YAM ${c.yamMin}%（70〜80%）：大腿骨近位部骨折の家族歴、またはFRAX主要骨折10年確率15%以上なら治療開始` };
+  if (c.yamMin < 80) {
+    // 骨折のない骨量減少（GL2025 p90-91 図4-2）：家族歴、または75歳未満でFRAX 15%以上
+    const base = `YAM ${c.yamMin}%（70〜80%）・脆弱性骨折なし`;
+    const o = { dx: "骨量減少", osteopenia: true };
+    if (c.famhx) return { ...o, treat: "yes", why: `${base}＋大腿骨近位部骨折の家族歴：薬物治療開始基準を満たす（GL2025 p90-91）` };
+    if (c.age >= FRAX_MAX_AGE) return { ...o, treat: "option", why: `${base}：${FRAX_MAX_AGE}歳以上は日本の開始基準でFRAXを使わない（ほとんどの女性が${FRAX_CUT}%を超えるため、FRAXの基準は${FRAX_MAX_AGE}歳未満に適用。GL2025 p90-91）。大腿骨近位部骨折の家族歴が無ければ、日本の薬物治療開始基準は満たさない` };
+    if (c.frax == null) return { ...o, treat: "cond", why: `${base}：FRAX主要骨折10年確率が${FRAX_CUT}%以上（骨密度は入れずに計算）、または大腿骨近位部骨折の家族歴があれば治療開始（GL2025 p90-91）。FRAXを入力してください` };
+    if (c.frax >= FRAX_CUT) return { ...o, treat: "yes", why: `${base}＋FRAX主要骨折 ${c.frax}%（${FRAX_CUT}%以上）：薬物治療開始基準を満たす（GL2025 p90-91。グルココルチコイド・関節リウマチ・続発性骨粗鬆症がある人にはこの基準を使わない）` };
+    return { ...o, treat: "option", why: `${base}：FRAX主要骨折 ${c.frax}%（${FRAX_CUT}%未満）で家族歴なし。日本の薬物治療開始基準は満たさない（GL2025 p90-91）` };
+  }
   return { dx: "正常範囲", treat: "no", why: `YAM ${c.yamMin}%（80%以上）で脆弱性骨折なし：薬物治療開始基準を満たさない` };
 }
 
@@ -187,6 +212,9 @@ function check(id, c) {
   if (id === "RIS" && (c.dialysis || (c.renal != null && c.renal < 30))) ex.push(c.dialysis ? "透析（GL2025で禁忌）" : `${c.rn.useLabel} ${r1(c.renal)}（Ccr約30未満は禁忌）`);
   if (id === "ZOL" && (c.dialysis || (c.renal != null && c.renal < 35))) ex.push(c.dialysis ? "透析（GL2025で禁忌）" : `${c.rn.useLabel} ${r1(c.renal)}（Ccr 35未満は禁忌）`);
   if (id === "SERM" && c.sex === "M") ex.push("男性（閉経後骨粗鬆症のみ適応）");
+  if (d.cls === "avd" && highCa) ex.push(`補正Ca ${c.ca}（基準上限超。活性型ビタミンDは使わず原因を確認）`);
+  if (id === "ELD_M" && !sev && c.renal != null && c.renal < 60) warn.push(`${c.rn.useLabel} ${r1(c.renal)}：eGFR 60未満では高Ca血症のリスクが上がるので過剰投与に注意（GL2025 p93）。投与初期はCaを頻回に測定`);
+  if (d.cls === "avd" && c.renal == null && !c.dialysis) warn.push("腎機能が未入力（腎機能低下では高Ca血症が起こりやすい）");
 
   if (c.renal == null && !c.dialysis && (id === "RIS" || id === "ZOL")) warn.push("腎機能が未入力（腎機能で禁忌になる薬）");
   if (sev && (d.cls === "bp" || id === "ROMO")) warn.push(`${c.dialysis ? "透析" : c.rn.useLabel + " " + r1(c.renal)}：eGFR 30未満で低Ca血症のリスクが上がる（添付文書）。Caを頻回に測定`);
@@ -227,6 +255,10 @@ function orderMain(c, hr, dx) {
   } else if (sev) {
     list = ["DMAB", "ALN", "IBN", "MIN"];
     why = "重度の腎機能低下（アプリの目安：30未満）：リセドロン酸・ゾレドロン酸は禁忌（表6-7）。BPは低Caに注意しつつ慎重投与";
+    if (dx.osteopenia) {
+      list = ["ALF_M", "DMAB", "ALN", "IBN"];
+      why += "。骨折のない骨量減少では臨床効果が確認された薬が無く（p90）、重度の腎機能低下ではBP・デノスマブの低Caリスクも高いので、アルファカルシドール単独を先頭にした（アプリの判断。GL2025はアルファカルシドール単剤を他剤が使えない場合に限定：p117）。この腎機能ではCKDに伴う骨ミネラル代謝異常としての評価（PTHなど）も行う";
+    }
   } else if (mjr) {
     list = [...BPDM, "ROMO", "TPTD_D"];
     why = "椎体・大腿骨近位部骨折ありだが、日本の基準（4条件）には当たらない：大腿骨近位部骨折の抑制根拠があるBP・デノスマブを優先（p92）";
@@ -236,8 +268,14 @@ function orderMain(c, hr, dx) {
       list = ["DMAB", "ALN", "ZOL", "SERM"];
       why = "BP使用中・使用歴あり：効果不十分ならBP→デノスマブが推奨される順序。経過良好ならBP継続、長期例は休薬も検討（休薬の対象はBPのみ）";
     } else if (sermFirst) {
-      list = ["SERM", "ALN", "RIS", "DMAB", "ZOL", "MIN", "IBN"];
-      why = `閉経後早期（アプリの目安：${SERM_AGE}歳未満）で椎体・大腿骨近位部骨折なし、YAM 70%超（骨量減少の範囲）${c.yamF == null ? "※大腿骨YAM未入力" : ""}：GL2025 p92は長期の投薬継続を考えSERMを第一選択薬の一つとする。椎体骨折は減らすが非椎体骨折の抑制根拠は無い（CQ25・27）`;
+      list = ["SERM", "ELD_M", "ALN", "RIS", "DMAB", "ZOL", "MIN", "IBN"];
+      why = `閉経後早期（アプリの目安：${SERM_AGE}歳未満）で椎体・大腿骨近位部骨折なし、YAM 70%超（骨量減少の範囲）${c.yamF == null ? "※大腿骨YAM未入力" : ""}：GL2025 p92は長期の投薬継続を考えSERMを第一選択薬の一つとする。椎体骨折は減らすが非椎体骨折の抑制根拠は無い（CQ25・27）。同じp92は活性型ビタミンD3薬の単独（または骨吸収抑制薬との併用）も選択肢とする`;
+    } else if (dx.osteopenia) {
+      // 骨折のない骨量減少（70歳以上の女性・男性）
+      list = c.sex === "F" ? ["ZOL", "ALN", "ELD_M", "RIS", "DMAB", "SERM"] : ["ALN", "RIS", "ELD_M", "ZOL", "DMAB"];
+      why = "骨折のない骨量減少：この条件で臨床効果が確認された薬は無い（GL2025 p90）。WHO基準の骨量減少（T −1.0〜−2.5）で骨折抑制が報告されているのはゾレドロン酸（65歳以上の女性。p134）とラロキシフェン（椎体のみ。p136）に限られるが、他の薬も無効というわけではなく、リスクとベネフィットで選ぶ（p90）。活性型ビタミンD3薬の単独は椎体骨折のない早期の患者での選択肢（p92）だが、大腿骨近位部骨折の抑制エビデンスは無い（CQ42）";
+      if (c.sex === "F") why += "。直接の根拠があるゾレドロン酸を先頭にした（試験は18か月ごと。国内の用法は年1回）";
+      else why += "。ゾレドロン酸の試験は女性のみのため、男性では経口BPを先頭にした";
     } else {
       list = [...BPDM, "SERM", "MIN", "IBN"];
       why = "骨折の危険性が高い日本の基準（4条件）には当たらない：骨吸収抑制薬から開始（p92）。大腿骨近位部骨折まで抑制が示されたBP・デノスマブを優先";
@@ -258,7 +296,8 @@ function orderMain(c, hr, dx) {
       why += "。椎体骨折による腰痛があるため、疼痛軽減の報告があるテリパラチドを次点に入れた";
     }
   }
-  if (dx.treat === "cond") why = "骨量減少（条件付きで治療開始）。" + why;
+  if (dx.treat === "cond") why = "治療開始基準を満たす場合の候補。" + why;
+  if (dx.treat === "option") why = "日本の治療開始基準は満たさないが、薬を使う場合の候補。" + why;
   const ok = [], ng = [];
   for (const id of list.filter(Boolean)) {
     const r = check(id, c);
@@ -301,6 +340,14 @@ function companion(id, c) {
     }
     return out;
   }
+  if (d.cls === "avd") {
+    out.items.push({ name: "併用薬なし（単独で使う）", dose: "" });
+    out.notes.push("Ca製剤・他のビタミンD製剤を足すと高Ca血症が起こりやすい（添付文書の併用注意）。Caは食事から摂る");
+    if (vdLow) out.notes.push(`25(OH)D ${c.vd}（欠乏）：天然型ビタミンDの補充も検討`);
+    else if (vdIns) out.notes.push(`25(OH)D ${c.vd}（不足）`);
+    out.src.push(id === "ALF_M" ? "alf" : "eld");
+    return out;
+  }
   if (d.cls === "pth") {
     out.items.push({ name: "活性型ビタミンDは中止（併用しない）", dose: "" });
     out.notes.push(id === "TPTD_D"
@@ -334,7 +381,7 @@ function drugCard(item, c, rank) {
     ${BASIS[item.id] ? `<div class="why">選択の根拠：${esc(BASIS[item.id])}（GL2025）</div>` : ""}
     ${notes.length ? `<ul>${notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
     <div class="plus">
-      <div class="why">＋ 併用${item.id === "DMAB" || item.id === "ROMO" ? "（添付文書上 必要）" : d.cls === "pth" ? "" : "（検討）"}</div>
+      <div class="why">＋ 併用${item.id === "DMAB" || item.id === "ROMO" ? "（添付文書上 必要）" : d.cls === "pth" || d.cls === "avd" ? "" : "（検討）"}</div>
       ${comp.items.map((x) => `<div class="drug">${esc(x.name)}</div>${x.dose ? `<div class="dose">${esc(x.dose)}</div>` : ""}`).join("")}
       ${comp.notes.length ? `<ul>${comp.notes.map((n) => `<li>${esc(n)}</li>`).join("")}</ul>` : ""}
     </div>
@@ -383,10 +430,16 @@ function render() {
     return;
   }
 
+  if (dx.treat === "option") {
+    const tF = c.yamF != null ? `この患者の大腿骨YAM ${c.yamF}%はTスコア約${tOf(c.yamF, "F").toFixed(1)}（付表1からの近似）。` : "";
+    h += `<div class="caution">参考（海外）：${esc(tF + ABROAD_NOTE)}。</div>`;
+  }
+  if (dx.osteopenia) h += `<div class="caution">各薬の効能・効果は「骨粗鬆症」（添付文書）。続発性骨粗鬆症（グルココルチコイド・性ホルモン低下療法など）の骨量減少は別の基準で治療する（GL2025 p90）。</div>`;
   const { ok, ng, why } = orderMain(c, hr, dx);
+  const opt = dx.treat === "option" ? "薬を使う場合の" : "";
   h += `<div class="why" style="margin-top:8px">${esc(why)}</div>`;
   if (ok.length) {
-    h += `<h3 class="rank">第1候補</h3>` + drugCard(ok[0], c, 0);
+    h += `<h3 class="rank">${opt}第1候補</h3>` + drugCard(ok[0], c, 0);
     if (ok.length > 1) h += `<h3 class="rank">次点</h3>` + ok.slice(1, 3).map((it) => drugCard(it, c, 1)).join("");
   } else {
     h += `<div class="alert"><b>この条件で使える候補がありません</b>：まず下の理由（Caの補正など）を解決してください。</div>`;
@@ -403,6 +456,8 @@ function render() {
   [...ok.slice(0, 3), ...ng].forEach((it) => { DRUGS[it.id].src.forEach((s) => keys.add(s)); companion(it.id, c).src.forEach((s) => keys.add(s)); });
   if (c.dental) keys.add("onj");
   if (c.vpain) ["nass", "nevitt", "hadji"].forEach((k) => keys.add(k));
+  if (dx.treat === "option") ["reid", "bhof", "acp", "kanis"].forEach((k) => keys.add(k));
+  else if (dx.osteopenia) keys.add("reid");
   if ((c.dialysis || (c.renal != null && c.renal < RENAL_SEVERE)) && ok.some((it) => it.id === "DMAB")) keys.add("fda");
   h += sources([...keys]);
   box.innerHTML = h;
